@@ -5,14 +5,13 @@ const { getAccessToken, getUserInfo } = require('../utils/discord');
 
 const router = express.Router();
 
-// Step 1: Redirect to Discord OAuth2
 router.get('/discord', (req, res) => {
   const state = Math.random().toString(36).substring(2, 15);
   const discordAuthUrl = `https://discord.com/api/oauth2/authorize?` +
     `client_id=${process.env.DISCORD_CLIENT_ID}&` +
     `redirect_uri=${encodeURIComponent(process.env.DISCORD_REDIRECT_URI)}&` +
     `response_type=code&` +
-    `scope=identify&` +
+    `scope=identify guilds&` + 
     `state=${state}`;
   
   res.redirect(discordAuthUrl);
@@ -47,6 +46,7 @@ router.get('/discord/callback', async (req, res) => {
       avatar: userInfo.avatar,
       email: userInfo.email,
       verified: userInfo.verified,
+      accessToken: tokens.access_token, // Store access token
       iat: Math.floor(Date.now() / 1000)
     };
 

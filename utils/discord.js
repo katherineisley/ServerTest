@@ -44,7 +44,49 @@ async function getUserInfo(accessToken) {
   }
 }
 
+async function getUserGuilds(accessToken) {
+  try {
+    const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Discord guilds fetch error:', error.response?.data || error.message);
+    throw new Error('Failed to fetch user guilds from Discord');
+  }
+}
+
+async function getGuildInfo(guildId, botToken) {
+  try {
+    const response = await axios.get(`https://discord.com/api/guilds/${guildId}`, {
+      headers: {
+        'Authorization': `Bot ${botToken}`
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Discord guild info error:', error.response?.data || error.message);
+    throw new Error('Failed to fetch guild information');
+  }
+}
+
+// Check if user has admin permissions in guild
+function hasAdminPermissions(permissions) {
+  const ADMINISTRATOR = 0x8;
+  const MANAGE_GUILD = 0x20;
+  
+  return (permissions & ADMINISTRATOR) === ADMINISTRATOR || 
+         (permissions & MANAGE_GUILD) === MANAGE_GUILD;
+}
+
 module.exports = { 
   getAccessToken, 
-  getUserInfo 
+  getUserInfo,
+  getUserGuilds,
+  getGuildInfo,
+  hasAdminPermissions
 };
