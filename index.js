@@ -43,6 +43,6 @@ app.use('*', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Discord OAuth2 Backend running on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}`);
-  console.log(`🔐 Auth endpoint: http://localhost:${PORT}/api/auth/discord`);
+  console.log(`📡 Health check: ${HOST}`);
+  console.log(`🔐 Auth endpoint: ${HOST}/api/auth/discord`);
 });
