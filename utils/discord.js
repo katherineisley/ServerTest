@@ -1,50 +1,50 @@
+// ===== utils/discord.js =====
 const axios = require('axios');
-const qs = require('querystring');
 
 async function getAccessToken(code) {
-  const params = {
+  const params = new URLSearchParams({
     client_id: process.env.DISCORD_CLIENT_ID,
     client_secret: process.env.DISCORD_CLIENT_SECRET,
     grant_type: 'authorization_code',
-    code,
+    code: code,
     redirect_uri: process.env.DISCORD_REDIRECT_URI,
-    scope: 'identify guilds'
-  };
-
-  const res = await axios.post('https://discord.com/api/oauth2/token', qs.stringify(params), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    scope: 'identify'
   });
 
-  return res.data;
+  try {
+    const response = await axios.post(
+      'https://discord.com/api/oauth2/token',
+      params,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    return response.data;
+  } catch (error) {
+    console.error('Discord token exchange error:', error.response?.data || error.message);
+    throw new Error('Failed to exchange authorization code for access token');
+  }
 }
 
-async function refreshAccessToken(refresh_token) {
-  const params = {
-    client_id: process.env.DISCORD_CLIENT_ID,
-    client_secret: process.env.DISCORD_CLIENT_SECRET,
-    grant_type: 'refresh_token',
-    refresh_token,
-    redirect_uri: process.env.DISCORD_REDIRECT_URI,
-    scope: 'identify guilds'
-  };
-
-  const res = await axios.post('https://discord.com/api/oauth2/token', qs.stringify(params), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
-
-  return res.data;
+async function getUserInfo(accessToken) {
+  try {
+    const response = await axios.get('https://discord.com/api/users/@me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Discord user info error:', error.response?.data || error.message);
+    throw new Error('Failed to fetch user information from Discord');
+  }
 }
 
-async function getUserInfo(token) {
-  return (await axios.get('https://discord.com/api/users/@me', {
-    headers: { Authorization: `Bearer ${token}` }
-  })).data;
-}
-
-async function getUserGuilds(token) {
-  return (await axios.get('https://discord.com/api/users/@me/guilds', {
-    headers: { Authorization: `Bearer ${token}` }
-  })).data;
-}
-
-module.exports = { getAccessToken, refreshAccessToken, getUserInfo, getUserGuilds };
+module.exports = { 
+  getAccessToken, 
+  getUserInfo 
+};

@@ -1,52 +1,48 @@
+// ===== index.js =====
 const express = require('express');
-const https = require('https');
-const fs = require('fs');
 const cors = require('cors');
-const session = require('express-session');
-const sequelize = require('./config/sequelize');
 const authRoutes = require('./routes/auth');
-
 require('dotenv').config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
+// CORS Configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: true
-}));
 
+// Routes
 app.use('/api/auth', authRoutes);
 
+// Health check endpoint
 app.get('/', (req, res) => {
-  res.send('API is running securely ✅');
-});
-
-// Sync DB and start HTTPS server
-sequelize.sync().then(() => {
-  const httpsOptions = {
-    key: fs.readFileSync('localhost-key.pem'),
-    cert: fs.readFileSync('localhost.pem'),
-  };
-
-  https.createServer(httpsOptions, app).listen(3000, () => {
-    console.log('Secure backend running at https://localhost:3000');
+  res.json({ 
+    status: 'OK', 
+    message: 'Discord OAuth2 JWT Backend is running!',
+    timestamp: new Date().toISOString()
   });
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
-(async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('✅ Database connection has been established successfully.');
-  } catch (error) {
-    console.error('❌ Unable to connect to the database:', error);
-  }
-})();
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Discord OAuth2 Backend running on port ${PORT}`);
+  console.log(`📡 Health check: http://localhost:${PORT}`);
+  console.log(`🔐 Auth endpoint: http://localhost:${PORT}/api/auth/discord`);
+});

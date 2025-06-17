@@ -1,106 +1,114 @@
+// ===== routes/auth.js =====
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
-const { getAccessToken, refreshAccessToken, getUserInfo, getUserGuilds } = require('../utils/discord');
-const User = require('../models/User');
+const { getAccessToken, getUserInfo } = require('../utils/discord');
 
 const router = express.Router();
 
-router.use(cookieParser());
-
-// Step 1: Redirect to Discord
+// Step 1: Redirect to Discord OAuth2
 router.get('/discord', (req, res) => {
-  const url = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.DISCORD_REDIRECT_URI)}&response_type=code&scope=identify guilds`;
-  res.redirect(url);
+  const state = Math.random().toString(36).substring(2, 15);
+  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?` +
+    `client_id=${process.env.DISCORD_CLIENT_ID}&` +
+    `redirect_uri=${encodeURIComponent(process.env.DISCORD_REDIRECT_URI)}&` +
+    `response_type=code&` +
+    `scope=identify&` +
+    `state=${state}`;
+  
+  res.redirect(discordAuthUrl);
 });
 
-// Step 2: Handle callback
+// Step 2: Handle Discord callback and return JWT
 router.get('/discord/callback', async (req, res) => {
+  const { code, error, state } = req.query;
+
+  // Handle OAuth errors
+  if (error) {
+    console.error('Discord OAuth error:', error);
+    return res.status(400).json({ 
+      error: 'Discord OAuth failed', 
+      details: error 
+    });
+  }
+
+  if (!code) {
+    return res.status(400).json({ 
+      error: 'No authorization code provided' 
+    });
+  }
+
   try {
-    const tokens = await getAccessToken(req.query.code);
+    // Exchange code for access token
+    const tokens = await getAccessToken(code);
+    
+    // Get user information
     const userInfo = await getUserInfo(tokens.access_token);
-
-    // Upsert user
-    const [user] = await User.findOrCreate({
-      where: { discordId: userInfo.id },
-      defaults: {
-        username: userInfo.username,
-        avatar: userInfo.avatar,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token
-      }
-    });
-
-    // Update tokens
-    await user.update({
+    
+    // Create JWT payload
+    const jwtPayload = {
+      discordId: userInfo.id,
       username: userInfo.username,
+      discriminator: userInfo.discriminator,
       avatar: userInfo.avatar,
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token
+      email: userInfo.email,
+      verified: userInfo.verified,
+      iat: Math.floor(Date.now() / 1000)
+    };
+
+    // Sign JWT token
+    const jwtToken = jwt.sign(
+      jwtPayload, 
+      process.env.JWT_SECRET, 
+      { 
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+        issuer: 'discord-oauth-backend'
+      }
+    );
+
+    // Return JWT token as JSON response
+    res.json({
+      success: true,
+      token: jwtToken,
+      user: {
+        id: userInfo.id,
+        username: userInfo.username,
+        discriminator: userInfo.discriminator,
+        avatar: userInfo.avatar ? `https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png` : null,
+        email: userInfo.email,
+        verified: userInfo.verified
+      },
+      expiresIn: process.env.JWT_EXPIRES_IN || '24h'
     });
 
-    // JWT + httpOnly secure cookie
-    const token = jwt.sign({ id: user.discordId }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== 'development',
-      sameSite: 'Strict',
-      maxAge: 3600000
-    });
-
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('OAuth Error');
+    console.error('OAuth callback error:', err);
+    res.status(500).json({ 
+      error: 'Authentication failed', 
+      message: err.message 
+    });
   }
 });
 
-// Middleware to verify JWT in cookie
-async function verifyUser(req, res, next) {
-  const token = req.cookies.token;
-  if (!token) return res.status(401).send('No token');
-
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({ where: { discordId: payload.id } });
-    if (!user) return res.status(404).send('User not found');
-    req.user = user;
-    next();
-  } catch (err) {
-    return res.status(403).send('Invalid token');
+// Token verification endpoint (optional utility)
+router.post('/verify', (req, res) => {
+  const { token } = req.body;
+  
+  if (!token) {
+    return res.status(400).json({ error: 'No token provided' });
   }
-}
 
-// Step 3: Protected route
-router.get('/me', verifyUser, async (req, res) => {
   try {
-    let guilds;
-    try {
-      guilds = await getUserGuilds(req.user.accessToken);
-    } catch {
-      // token expired, refresh it
-      const tokens = await refreshAccessToken(req.user.refreshToken);
-      await req.user.update({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token
-      });
-      guilds = await getUserGuilds(tokens.access_token);
-    }
-
-    // Validate permissions (show only servers where user has MANAGE_GUILD or ADMIN)
-    const filteredGuilds = guilds.filter(g => (g.permissions & 0x20) || (g.permissions & 0x8));
-
-    res.json({
-      user: {
-        id: req.user.discordId,
-        username: req.user.username,
-        avatar: req.user.avatar
-      },
-      guilds: filteredGuilds
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ 
+      valid: true, 
+      user: decoded,
+      expiresAt: new Date(decoded.exp * 1000).toISOString()
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
+    res.status(401).json({ 
+      valid: false, 
+      error: 'Invalid or expired token' 
+    });
   }
 });
 
