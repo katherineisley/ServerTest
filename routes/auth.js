@@ -18,23 +18,18 @@ router.get('/discord', (req, res) => {
   res.redirect(discordAuthUrl);
 });
 
-// Step 2: Handle Discord callback and return JWT
+// Step 2: Handle Discord callback and redirect to frontend
 router.get('/discord/callback', async (req, res) => {
   const { code, error, state } = req.query;
 
   // Handle OAuth errors
   if (error) {
     console.error('Discord OAuth error:', error);
-    return res.status(400).json({ 
-      error: 'Discord OAuth failed', 
-      details: error 
-    });
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
   }
 
   if (!code) {
-    return res.status(400).json({ 
-      error: 'No authorization code provided' 
-    });
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code`);
   }
 
   try {
@@ -65,27 +60,12 @@ router.get('/discord/callback', async (req, res) => {
       }
     );
 
-    // Return JWT token as JSON response
-    res.json({
-      success: true,
-      token: jwtToken,
-      user: {
-        id: userInfo.id,
-        username: userInfo.username,
-        discriminator: userInfo.discriminator,
-        avatar: userInfo.avatar ? `https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png` : null,
-        email: userInfo.email,
-        verified: userInfo.verified
-      },
-      expiresIn: process.env.JWT_EXPIRES_IN || '24h'
-    });
+    // Redirect back to frontend with token
+    res.redirect(`${process.env.FRONTEND_URL}/login?token=${jwtToken}`);
 
   } catch (err) {
     console.error('OAuth callback error:', err);
-    res.status(500).json({ 
-      error: 'Authentication failed', 
-      message: err.message 
-    });
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
   }
 });
 
