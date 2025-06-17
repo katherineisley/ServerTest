@@ -25,11 +25,11 @@ router.get('/discord/callback', async (req, res) => {
   // Handle OAuth errors
   if (error) {
     console.error('Discord OAuth error:', error);
-    return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
+    return res.redirect(`${process.env.FRONTEND_URL}?error=oauth_failed`);
   }
 
   if (!code) {
-    return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code`);
+    return res.redirect(`${process.env.FRONTEND_URL}?error=no_code`);
   }
 
   try {
@@ -61,11 +61,11 @@ router.get('/discord/callback', async (req, res) => {
     );
 
     // Redirect back to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/login?token=${jwtToken}`);
+    res.redirect(`${process.env.FRONTEND_URL}?token=${jwtToken}`);
 
   } catch (err) {
     console.error('OAuth callback error:', err);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+    res.redirect(`${process.env.FRONTEND_URL}?error=auth_failed`);
   }
 });
 
