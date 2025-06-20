@@ -8,7 +8,7 @@ async function getAccessToken(code) {
     grant_type: 'authorization_code',
     code: code,
     redirect_uri: process.env.DISCORD_REDIRECT_URI,
-    scope: 'identify'
+    scope: 'identify guilds' // Updated to match your scope
   });
 
   try {
@@ -26,6 +26,33 @@ async function getAccessToken(code) {
   } catch (error) {
     console.error('Discord token exchange error:', error.response?.data || error.message);
     throw new Error('Failed to exchange authorization code for access token');
+  }
+}
+
+// 🔥 NEW: Function to refresh Discord access token
+async function refreshAccessToken(refreshToken) {
+  const params = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    client_secret: process.env.DISCORD_CLIENT_SECRET,
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken
+  });
+
+  try {
+    const response = await axios.post(
+      'https://discord.com/api/oauth2/token',
+      params,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    return response.data;
+  } catch (error) {
+    console.error('Discord token refresh error:', error.response?.data || error.message);
+    throw new Error('Failed to refresh Discord access token');
   }
 }
 
@@ -88,5 +115,6 @@ module.exports = {
   getUserInfo,
   getUserGuilds,
   getGuildInfo,
-  hasAdminPermissions
+  hasAdminPermissions,
+  refreshAccessToken 
 };
